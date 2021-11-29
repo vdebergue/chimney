@@ -107,26 +107,31 @@ trait PatcherMacros extends PatcherConfiguration {
       case Some(tParam) if patchParamTpe <:< tParam.resultTypeIn(T) =>
         Some(Right(patchField))
       case Some(tParam) =>
-        Some(
-          expandTransformerTree(patchField, TransformerConfig())(
-            patchParamTpe,
-            tParam.resultTypeIn(T)
-          ).left
-            .flatMap { errors =>
-              if (isOption(patchParamTpe)) {
-                expandTransformerTree(q"$patchField.get", TransformerConfig())(
-                  patchParamTpe.typeArgs.head,
-                  tParam.resultTypeIn(T)
-                ).map { innerTransformerTree =>
-                    q"if($patchField.isDefined) { $innerTransformerTree } else { $entityField }"
+        expandPatcherTree(entityField, patchField)(tParam.resultTypeIn(T), patchParamTpe)
+          .map(Right(_))
+          .orElse {
+            Some(
+              expandTransformerTree(patchField, TransformerConfig())(
+                patchParamTpe,
+                tParam.resultTypeIn(T)
+              ).left
+                .flatMap { errors =>
+                  if (isOption(patchParamTpe)) {
+                    expandTransformerTree(q"$patchField.get", TransformerConfig())(
+                      patchParamTpe.typeArgs.head,
+                      tParam.resultTypeIn(T)
+                    ).map { innerTransformerTree =>
+                        q"if($patchField.isDefined) { $innerTransformerTree } else { $entityField }"
+                      }
+                      .left
+                      .map(errors2 => DerivationError.printErrors(errors ++ errors2))
+                  } else {
+                    Left(DerivationError.printErrors(errors))
                   }
-                  .left
-                  .map(errors2 => DerivationError.printErrors(errors ++ errors2))
-              } else {
-                Left(DerivationError.printErrors(errors))
-              }
-            }
-        )
+                }
+            )
+          }
+
       case None =>
         if (config.ignoreRedundantPatcherFields) {
           None
@@ -135,6 +140,24 @@ trait PatcherMacros extends PatcherConfiguration {
             Left(s"Field named '${pParam.name}' not found in target patching type $T!")
           )
         }
+    }
+  }
+
+  def expandPatcherTree(objTree: Tree, patchTree: Tree)(T: Type, Patch: Type): Option[Tree] = {
+    findLocalImplicitPatcher(T, Patch)
+      .map(localImplicitTree => localImplicitTree.callPatch(objTree, patchTree))
+  }
+
+  def findLocalImplicitPatcher(T: Type, Patch: Type): Option[Tree] = {
+    val searchTypeTree: Tree = tq"_root_.io.scalaland.chimney.Patcher[$T, $Patch]"
+    inferImplicitTpe(searchTypeTree, macrosDisabled = false).filterNot(isDeriving)
+  }
+
+  private def isDeriving(tree: Tree): Boolean = {
+    tree match {
+      case TypeApply(Select(qualifier, name), _) =>
+        qualifier.tpe =:= weakTypeOf[io.scalaland.chimney.Patcher.type] && name.toString == "derive"
+      case _ => false
     }
   }
 }

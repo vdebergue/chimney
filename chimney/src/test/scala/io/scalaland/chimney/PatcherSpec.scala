@@ -122,6 +122,23 @@ object PatcherSpec extends TestSuite {
         .ignoreNoneInPatch
         .patch ==> exampleUserWithOptionalField
     }
+
+    "macro looks for implicits patcher" - {
+      import TestDomain._
+
+      case class Profile(user: User)
+      case class ProfileUpdate(user: ProfileUserUpdate)
+      case class ProfileUserUpdate(emailAddress: String)
+
+      implicit def patcher: Patcher[User, ProfileUserUpdate] =
+        (obj: User, patch: ProfileUserUpdate) => obj.copy(email = Email(patch.emailAddress))
+
+      val update = ProfileUpdate(ProfileUserUpdate("xyz@def.com"))
+      val profile = Profile(exampleUser)
+
+      profile.patchUsing(update) ==>
+        Profile(User(10, Email("xyz@def.com"), Phone(1234567890L)))
+    }
   }
 
 }

@@ -258,6 +258,10 @@ trait MacroUtils extends CompanionUtils {
     def callTransform(input: Tree): Tree = {
       q"$t.transform($input)"
     }
+
+    def callPatch(obj: Tree, patch: Tree): Tree = {
+      q"$t.patch($obj, $patch)"
+    }
   }
   // $COVERAGE-ON$
 

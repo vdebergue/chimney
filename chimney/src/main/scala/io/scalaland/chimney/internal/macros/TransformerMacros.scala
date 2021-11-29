@@ -817,7 +817,7 @@ trait TransformerMacros extends TransformerConfigSupport with MappingMacros with
     )
   }
 
-  private def inferImplicitTpe(tpeTree: Tree, macrosDisabled: Boolean): Option[Tree] = {
+  private[macros] def inferImplicitTpe(tpeTree: Tree, macrosDisabled: Boolean): Option[Tree] = {
     val typedTpeTree = c.typecheck(
       tree = tpeTree,
       silent = true,
